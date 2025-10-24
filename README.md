@@ -53,5 +53,5 @@ await signer.sendTransaction({
 
 Save the deployed contract address to `.env` as:
 ```
-CONTRACT_ADDRESS=0x... ok
+CONTRACT_ADDRESS=0x... 
 ```
