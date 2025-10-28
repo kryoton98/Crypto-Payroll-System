@@ -1,4 +1,4 @@
-# Crypto Payroll System — Quick Start Guide yay
+# Crypto Payroll System — Quick Start Guide 
 
 ## Step 1 — Setup environment
 ```bash
