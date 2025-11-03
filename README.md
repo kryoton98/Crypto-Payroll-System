@@ -56,3 +56,7 @@ Save the deployed contract address to `.env` as:
 CONTRACT_ADDRESS=0x... 
 ```
 /
+contract details:
+address:0x31727618DE1BD239961c36fe71a98A0C411E68F2
+<img width="1708" height="854" alt="image" src="https://github.com/user-attachments/assets/5f756b07-4e52-4408-874c-95d323ea3f05" />
+
