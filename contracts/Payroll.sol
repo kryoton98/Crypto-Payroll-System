@@ -14,7 +14,7 @@ contract Payroll is Ownable, ReentrancyGuard {
     }
 
     mapping(address => Employee) public employees;
-    address[] public employeeAddresses;
+    address[] private employeeAddresses;
 
     event EmployeeAdded(address indexed employee, uint256 salary);
     event EmployeeRemoved(address indexed employee);
@@ -22,9 +22,13 @@ contract Payroll is Ownable, ReentrancyGuard {
     event PaymentMade(address indexed employee, uint256 amount, uint256 timestamp);
     event ContractFunded(address indexed funder, uint256 amount);
 
-    constructor() {}
+    // ✅ FIX: Pass msg.sender to Ownable constructor
+    constructor() Ownable(msg.sender) {}
 
-    // Add new employee
+    // ------------------------------
+    // 🔹 EMPLOYEE MANAGEMENT
+    // ------------------------------
+
     function addEmployee(address _wallet, uint256 _salary) external onlyOwner {
         require(_wallet != address(0), "Invalid wallet address");
         require(_salary > 0, "Salary must be greater than 0");
@@ -41,116 +45,109 @@ contract Payroll is Ownable, ReentrancyGuard {
         emit EmployeeAdded(_wallet, _salary);
     }
 
-    // Remove employee
     function removeEmployee(address _wallet) external onlyOwner {
-        require(employees[_wallet].isActive, "Employee does not exist");
-
-        employees[_wallet].isActive = false;
+        Employee storage emp = employees[_wallet];
+        require(emp.isActive, "Employee not active");
+        emp.isActive = false;
         emit EmployeeRemoved(_wallet);
     }
 
-    // Update employee salary
     function updateSalary(address _wallet, uint256 _newSalary) external onlyOwner {
-        require(employees[_wallet].isActive, "Employee does not exist");
-        require(_newSalary > 0, "Salary must be greater than 0");
-
-        employees[_wallet].monthlySalary = _newSalary;
+        Employee storage emp = employees[_wallet];
+        require(emp.isActive, "Employee not active");
+        require(_newSalary > 0, "Invalid salary");
+        emp.monthlySalary = _newSalary;
         emit SalaryUpdated(_wallet, _newSalary);
     }
 
-    // Pay single employee
+    // ------------------------------
+    // 💸 PAYMENTS
+    // ------------------------------
+
     function payEmployee(address _wallet) external onlyOwner nonReentrant {
         Employee storage emp = employees[_wallet];
-        require(emp.isActive, "Employee does not exist");
-        require(address(this).balance >= emp.monthlySalary, "Insufficient contract balance");
+        require(emp.isActive, "Employee not active");
+        require(address(this).balance >= emp.monthlySalary, "Insufficient balance");
 
         emp.lastPaidDate = block.timestamp;
-        payable(_wallet).transfer(emp.monthlySalary);
+
+        (bool success, ) = payable(_wallet).call{value: emp.monthlySalary}("");
+        require(success, "Payment failed");
 
         emit PaymentMade(_wallet, emp.monthlySalary, block.timestamp);
     }
 
-    // Pay all active employees
     function payAllEmployees() external onlyOwner nonReentrant {
-        uint256 totalPayment = 0;
+        uint256 timestamp = block.timestamp;
 
-        // Calculate total payment needed
         for (uint256 i = 0; i < employeeAddresses.length; i++) {
-            address empAddress = employeeAddresses[i];
-            if (employees[empAddress].isActive) {
-                totalPayment += employees[empAddress].monthlySalary;
-            }
-        }
+            address empAddr = employeeAddresses[i];
+            Employee storage emp = employees[empAddr];
 
-        require(address(this).balance >= totalPayment, "Insufficient contract balance");
+            if (emp.isActive && emp.monthlySalary > 0) {
+                require(address(this).balance >= emp.monthlySalary, "Insufficient funds");
 
-        // Make payments
-        for (uint256 i = 0; i < employeeAddresses.length; i++) {
-            address empAddress = employeeAddresses[i];
-            Employee storage emp = employees[empAddress];
+                emp.lastPaidDate = timestamp;
+                (bool success, ) = payable(empAddr).call{value: emp.monthlySalary}("");
+                require(success, "Payment failed");
 
-            if (emp.isActive) {
-                emp.lastPaidDate = block.timestamp;
-                payable(empAddress).transfer(emp.monthlySalary);
-                emit PaymentMade(empAddress, emp.monthlySalary, block.timestamp);
+                emit PaymentMade(empAddr, emp.monthlySalary, timestamp);
             }
         }
     }
 
-    // Get employee count
-    function getEmployeeCount() external view returns (uint256) {
-        uint256 count = 0;
+    // ------------------------------
+    // 📊 VIEWS
+    // ------------------------------
+
+    function getEmployeeCount() external view returns (uint256 count) {
         for (uint256 i = 0; i < employeeAddresses.length; i++) {
-            if (employees[employeeAddresses[i]].isActive) {
-                count++;
-            }
+            if (employees[employeeAddresses[i]].isActive) count++;
         }
         return count;
     }
 
-    // Get all active employee addresses
     function getActiveEmployees() external view returns (address[] memory) {
         uint256 activeCount = 0;
-
-        // Count active employees
         for (uint256 i = 0; i < employeeAddresses.length; i++) {
-            if (employees[employeeAddresses[i]].isActive) {
-                activeCount++;
-            }
+            if (employees[employeeAddresses[i]].isActive) activeCount++;
         }
 
-        // Create array of active employees
-        address[] memory activeEmployees = new address[](activeCount);
+        address[] memory activeList = new address[](activeCount);
         uint256 index = 0;
 
         for (uint256 i = 0; i < employeeAddresses.length; i++) {
             if (employees[employeeAddresses[i]].isActive) {
-                activeEmployees[index] = employeeAddresses[i];
-                index++;
+                activeList[index++] = employeeAddresses[i];
             }
         }
 
-        return activeEmployees;
+        return activeList;
     }
 
-    // Get employee details
-    function getEmployee(address _wallet) external view returns (
-        address walletAddress,
-        uint256 monthlySalary,
-        uint256 lastPaidDate,
-        bool isActive
-    ) {
+    function getEmployee(address _wallet)
+        external
+        view
+        returns (
+            address walletAddress,
+            uint256 monthlySalary,
+            uint256 lastPaidDate,
+            bool isActive
+        )
+    {
         Employee memory emp = employees[_wallet];
         return (emp.walletAddress, emp.monthlySalary, emp.lastPaidDate, emp.isActive);
     }
 
-    // Fund contract
-    receive() external payable {
-        emit ContractFunded(msg.sender, msg.value);
-    }
-
-    // Get contract balance
     function getContractBalance() external view returns (uint256) {
         return address(this).balance;
+    }
+
+    // ------------------------------
+    // ⚙️ FUNDING
+    // ------------------------------
+
+    receive() external payable {
+        emit ContractFunded(msg.sender, msg.value);
     }
 }
