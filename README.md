@@ -51,7 +51,7 @@ await signer.sendTransaction({
 | npm test | Run test suite |
 | npm run deploy | Deploy to Core Testnet |
 
-Save the deployed contract address to `.env` as:
+Save the deployed contract address to `.env` as::
 ```
 CONTRACT_ADDRESS=0x... 
 ```
